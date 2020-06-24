@@ -124,7 +124,7 @@ func ExploreLocations(ctx context.Context) (*ExploreLocTree, error) {
 // Explore list of widgets with tokens. Every widget
 // is related to specific method (`InterestOverTime`, `InterestOverLoc`, `RelatedSearches`, `Suggestions`)
 // and contains required token and request information.
-func Explore(ctx context.Context, r *ExploreRequest, hl string) ([]*ExploreWidget, error) {
+func Explore(ctx context.Context, r *ExploreRequest) (*ExploreData, error) {
 	// hook for using incorrect `time` request (backward compatibility)
 	for _, r := range r.ComparisonItems {
 		r.Time = strings.ReplaceAll(r.Time, "+", " ")
@@ -134,7 +134,6 @@ func Explore(ctx context.Context, r *ExploreRequest, hl string) ([]*ExploreWidge
 
 	p := make(url.Values)
 	p.Set(paramTZ, "0")
-	p.Set(paramHl, hl)
 
 	// marshal request for query param
 	mReq, err := jsoniter.MarshalToString(r)
@@ -158,12 +157,12 @@ func Explore(ctx context.Context, r *ExploreRequest, hl string) ([]*ExploreWidge
 		return nil, err
 	}
 
-	return out.Widgets, nil
+	return &ExploreData{out.Widgets[0], out.Widgets[1], out.Widgets[2], out.Widgets[3]}, nil
 }
 
 // InterestOverTime as list of `Timeline` dots for chart.
-func InterestOverTime(ctx context.Context, w *ExploreWidget, hl string) ([]*Timeline, error) {
-	if w.ID != intOverTimeWidgetID {
+func (e *ExploreData) InterestOverTime(ctx context.Context) ([]*Timeline, error) {
+	if e.InterestOverTimeWidget.ID != intOverTimeWidgetID {
 		return nil, ErrInvalidWidgetType
 	}
 
@@ -171,17 +170,16 @@ func InterestOverTime(ctx context.Context, w *ExploreWidget, hl string) ([]*Time
 
 	p := make(url.Values)
 	p.Set(paramTZ, "0")
-	p.Set(paramHl, hl)
-	p.Set(paramToken, w.Token)
+	p.Set(paramToken, e.InterestOverTimeWidget.Token)
 
-	for i, v := range w.Request.CompItem {
+	for i, v := range e.InterestOverTimeWidget.Request.CompItem {
 		if len(v.Geo) == 0 {
-			w.Request.CompItem[i].Geo[""] = ""
+			e.InterestOverTimeWidget.Request.CompItem[i].Geo[""] = ""
 		}
 	}
 
 	// marshal request for query param
-	mReq, err := jsoniter.MarshalToString(w.Request)
+	mReq, err := jsoniter.MarshalToString(e.InterestOverTimeWidget.Request)
 	if err != nil {
 		return nil, errors.Wrapf(err, errInvalidRequest)
 	}
@@ -206,8 +204,8 @@ func InterestOverTime(ctx context.Context, w *ExploreWidget, hl string) ([]*Time
 }
 
 // InterestByLocation as list of `GeoMap`, with geo codes and interest values.
-func InterestByLocation(ctx context.Context, w *ExploreWidget, hl string) ([]*GeoMap, error) {
-	if w.ID != intOverRegionID {
+func (e ExploreData) InterestByLocation(ctx context.Context) ([]*GeoMap, error) {
+	if e.InterestByLocationWidget.ID != intOverRegionID {
 		return nil, ErrInvalidWidgetType
 	}
 
@@ -215,15 +213,14 @@ func InterestByLocation(ctx context.Context, w *ExploreWidget, hl string) ([]*Ge
 
 	p := make(url.Values)
 	p.Set(paramTZ, "0")
-	p.Set(paramHl, hl)
-	p.Set(paramToken, w.Token)
+	p.Set(paramToken, e.InterestByLocationWidget.Token)
 
-	if len(w.Request.CompItem) > 1 {
-		w.Request.DataMode = compareDataMode
+	if len(e.InterestByLocationWidget.Request.CompItem) > 1 {
+		e.InterestByLocationWidget.Request.DataMode = compareDataMode
 	}
 
 	// marshal request for query param
-	mReq, err := jsoniter.MarshalToString(w.Request)
+	mReq, err := jsoniter.MarshalToString(e.InterestByLocationWidget.Request)
 	if err != nil {
 		return nil, errors.Wrapf(err, errInvalidRequest)
 	}
@@ -247,8 +244,18 @@ func InterestByLocation(ctx context.Context, w *ExploreWidget, hl string) ([]*Ge
 	return out.Default.GeoMapData, nil
 }
 
-// Related topics or queries, list of `RankedKeyword`, supports two types of widgets.
-func Related(ctx context.Context, w *ExploreWidget, hl string) ([]*RankedKeyword, error) {
+// RelatedTopics .
+func (e ExploreData) RelatedTopics(ctx context.Context) ([]*RankedKeyword, error) {
+	return related(ctx, e.RelatedTopicsWidget)
+}
+
+// RelatedQuerys .
+func (e ExploreData) RelatedQuerys(ctx context.Context) ([]*RankedKeyword, error) {
+	return related(ctx, e.RelatedQuerysWidget)
+}
+
+// related topics or queries, list of `RankedKeyword`, supports two types of widgets.
+func related(ctx context.Context, w *ExploreWidget) ([]*RankedKeyword, error) {
 	if w.ID != relatedQueriesID && w.ID != relatedTopicsID {
 		return nil, ErrInvalidWidgetType
 	}
@@ -257,7 +264,6 @@ func Related(ctx context.Context, w *ExploreWidget, hl string) ([]*RankedKeyword
 
 	p := make(url.Values)
 	p.Set(paramTZ, "0")
-	p.Set(paramHl, hl)
 	p.Set(paramToken, w.Token)
 
 	if len(w.Request.Restriction.Geo) == 0 {

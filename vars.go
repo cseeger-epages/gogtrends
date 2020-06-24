@@ -150,7 +150,15 @@ type exploreOut struct {
 	Widgets []*ExploreWidget `json:"widgets" bson:"widgets"`
 }
 
-// ExploreWidget - output of Explore method, required for InterestOverTime, InterestByLocation and Related methods.
+// ExploreData - outpot of Explore
+type ExploreData struct {
+	InterestOverTimeWidget   *ExploreWidget
+	InterestByLocationWidget *ExploreWidget
+	RelatedTopicsWidget      *ExploreWidget
+	RelatedQuerysWidget      *ExploreWidget
+}
+
+// ExploreWidget - required for InterestOverTime, InterestByLocation and Related methods.
 // Globally it's a structure related to Google Trends UI and contains mostly system info
 type ExploreWidget struct {
 	Token   string          `json:"token" bson:"token"`
